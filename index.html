@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Brewtiful Days</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: sans-serif; background: #f5f0eb; color: #2c1a0e; }
+    header { background: #2c1a0e; color: #f5f0eb; padding: 16px; text-align: center; }
+    header h1 { font-size: 22px; }
+    header p { font-size: 13px; opacity: 0.7; margin-top: 4px; }
+    .tabs { display: flex; background: #fff; border-bottom: 2px solid #e0d6cc; }
+    .tab { flex: 1; padding: 12px; text-align: center; font-size: 14px; cursor: pointer; }
+    .tab.active { border-bottom: 3px solid #2c1a0e; font-weight: bold; }
+    .menu-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 16px; }
+    .card { background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+    .card img { width: 100%; height: 120px; object-fit: cover; }
+    .card-body { padding: 10px; }
+    .card-body h3 { font-size: 14px; }
+    .card-body .price { color: #b5541c; font-weight: bold; margin-top: 4px; font-size: 13px; }
+    .card-body .out { color: #aaa; font-size: 12px; margin-top: 4px; }
+    .btn-order { width: 100%; margin-top: 8px; padding: 8px; background: #2c1a0e; color: #fff; border: none; border-radius: 8px; font-size: 13px; cursor: pointer; }
+    .btn-order:disabled { background: #ccc; cursor: not-allowed; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>☕ Brewtiful Days</h1>
+    <p>Meja <span id="table-id">-</span></p>
+  </header>
+
+  <div class="tabs">
+    <div class="tab active" onclick="filterMenu('all')">Semua</div>
+    <div class="tab" onclick="filterMenu('minuman')">Minuman</div>
+    <div class="tab" onclick="filterMenu('makanan')">Makanan</div>
+    <div class="tab" onclick="filterMenu('snack')">Snack</div>
+  </div>
+
+  <div class="menu-grid" id="menu-grid"></div>
+
+  <script>
+    const tg = window.Telegram.WebApp;
+    tg.expand();
+
+    const params = new URLSearchParams(window.location.search);
+    document.getElementById('table-id').textContent = params.get('table') || '?';
+
+    const menus = [
+      { name: 'Es Kopi Susu', category: 'minuman', price: 25000, stock: true, img: 'https://placehold.co/300x200/2c1a0e/fff?text=Es+Kopi+Susu' },
+      { name: 'Matcha Latte', category: 'minuman', price: 28000, stock: true, img: 'https://placehold.co/300x200/4a7c59/fff?text=Matcha+Latte' },
+      { name: 'Americano', category: 'minuman', price: 20000, stock: false, img: 'https://placehold.co/300x200/555/fff?text=Americano' },
+      { name: 'Nasi Goreng', category: 'makanan', price: 35000, stock: true, img: 'https://placehold.co/300x200/c8a165/fff?text=Nasi+Goreng' },
+      { name: 'Roti Bakar', category: 'makanan', price: 18000, stock: true, img: 'https://placehold.co/300x200/d4a96a/fff?text=Roti+Bakar' },
+      { name: 'Kentang Goreng', category: 'snack', price: 15000, stock: true, img: 'https://placehold.co/300x200/e0c068/2c1a0e?text=Kentang' },
+      { name: 'Onion Ring', category: 'snack', price: 18000, stock: false, img: 'https://placehold.co/300x200/c8a165/fff?text=Onion+Ring' },
+    ];
+
+    let currentCategory = 'all';
+
+    function filterMenu(cat) {
+      currentCategory = cat;
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      event.target.classList.add('active');
+      renderMenu();
+    }
+
+    function renderMenu() {
+      const grid = document.getElementById('menu-grid');
+      const filtered = currentCategory === 'all' ? menus : menus.filter(m => m.category === currentCategory);
+      grid.innerHTML = filtered.map(item => `
+        <div class="card">
+          <img src="${item.img}" alt="${item.name}" />
+          <div class="card-body">
+            <h3>${item.name}</h3>
+            <div class="price">Rp ${item.price.toLocaleString('id-ID')}</div>
+            ${!item.stock ? '<div class="out">⚠️ Habis</div>' : ''}
+            <button class="btn-order" ${!item.stock ? 'disabled' : ''} onclick="order('${item.name}', ${item.price})">
+              ${item.stock ? 'Pesan' : 'Habis'}
+            </button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function order(name, price) {
+      tg.sendData(JSON.stringify({ item: name, price: price, table: params.get('table') }));
+    }
+
+    renderMenu();
+  </script>
+</body>
+</html>
