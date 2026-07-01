@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Brewtiful Days</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: sans-serif; background: #f5f0eb; color: #2c1a0e; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
@@ -22,8 +23,7 @@
     .card-body .price { color: #b5541c; font-weight: 700; margin-top: 4px; font-size: 13px; }
     .out-badge { display: inline-block; background: #f0e6e6; color: #c0392b; font-size: 10px; padding: 2px 6px; border-radius: 20px; margin-top: 4px; }
     .sub-options { display: flex; gap: 4px; margin-top: 6px; flex-wrap: wrap; }
-    .sub-opt { font-size: 10px; padding: 3px 8px; border-radius: 20px; border: 1px solid #2c1a0e; background: #fff; cursor: pointer; color: #2c1a0e; }
-    .sub-opt.selected { background: #2c1a0e; color: #fff; }
+    .sub-opt { font-size: 10px; padding: 3px 8px; border-radius: 20px; border: 1px solid #2c1a0e; background: #fff; color: #2c1a0e; }
     .btn-order { width: 100%; margin-top: 8px; padding: 8px; background: #2c1a0e; color: #fff; border: none; border-radius: 8px; font-size: 12px; cursor: pointer; font-weight: 600; }
     .btn-order:disabled { background: #ddd; color: #aaa; cursor: not-allowed; }
     .orders-empty { text-align: center; padding: 60px 20px; color: #aaa; }
@@ -39,6 +39,12 @@
     .qty-num { font-size: 15px; font-weight: 700; min-width: 20px; text-align: center; }
     .item-total { font-size: 12px; color: #888; }
     .order-total { background: #2c1a0e; color: #fff; border-radius: 12px; padding: 14px; margin-top: 12px; display: flex; justify-content: space-between; font-weight: 700; }
+    .promo-wrap { background: #fff; border-radius: 12px; padding: 12px; margin-top: 12px; display: flex; gap: 8px; }
+    .promo-wrap input { flex: 1; border: 1px solid #e0d6cc; border-radius: 8px; padding: 8px 10px; font-size: 13px; text-transform: uppercase; }
+    .btn-promo { padding: 8px 14px; background: #2c1a0e; color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
+    .promo-info { font-size: 12px; color: #155724; background: #d4edda; padding: 8px 12px; border-radius: 8px; margin-top: 8px; }
+    .promo-error { font-size: 12px; color: #721c24; background: #f8d7da; padding: 8px 12px; border-radius: 8px; margin-top: 8px; }
+    .discount-row { display: flex; justify-content: space-between; padding: 8px 14px; color: #155724; font-weight: 600; font-size: 13px; }
     .btn-checkout { width: 100%; margin-top: 12px; padding: 14px; background: #b5541c; color: #fff; border: none; border-radius: 12px; font-size: 15px; font-weight: 700; cursor: pointer; }
     .feedback-form { background: #fff; border-radius: 14px; padding: 16px; box-shadow: 0 2px 10px rgba(0,0,0,0.07); }
     .feedback-form p { font-size: 13px; margin-bottom: 8px; color: #555; }
@@ -52,8 +58,6 @@
     .nav-item .icon { font-size: 20px; }
     .nav-item.active { color: #2c1a0e; font-weight: 700; }
     .badge { background: #b5541c; color: #fff; font-size: 9px; padding: 1px 5px; border-radius: 20px; position: absolute; top: 6px; right: 12px; }
-
-    /* MODAL */
     .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 200; display: flex; align-items: flex-end; }
     .modal { background: #fff; border-radius: 20px 20px 0 0; padding: 20px; width: 100%; }
     .modal h3 { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
@@ -64,11 +68,22 @@
     .modal-opt.selected { background: #2c1a0e; color: #fff; }
     .btn-add-modal { width: 100%; padding: 13px; background: #b5541c; color: #fff; border: none; border-radius: 12px; font-size: 15px; font-weight: 700; cursor: pointer; }
     .btn-modal-close { width: 100%; padding: 10px; background: none; border: none; color: #aaa; font-size: 13px; cursor: pointer; margin-top: 8px; }
+    .loading { text-align: center; padding: 40px; color: #aaa; }
+    .no-tg { display: none; min-height: 100vh; align-items: center; justify-content: center; text-align: center; padding: 40px; background: #2c1a0e; color: #f5f0eb; flex-direction: column; }
+    .no-tg h2 { font-size: 20px; margin-bottom: 12px; }
+    .no-tg p { font-size: 14px; opacity: 0.7; }
   </style>
 </head>
 <body>
 
-  <header>
+  <!-- PROTEKSI: tampil kalau bukan dari Telegram -->
+  <div class="no-tg" id="no-tg">
+    <div style="font-size:48px;margin-bottom:16px">🫘</div>
+    <h2>Brewtiful Days</h2>
+    <p>Silakan scan QR code di meja<br>untuk membuka menu.</p>
+  </div>
+
+  <header id="main-header">
     <div class="header-left">
       <h1>Brewtiful Days</h1>
       <p>☕ Meja <span id="table-id">-</span></p>
@@ -78,7 +93,7 @@
 
   <div class="content" id="content"></div>
 
-  <nav class="bottom-nav">
+  <nav class="bottom-nav" id="bottom-nav">
     <div class="nav-item active" onclick="navigate('food')" id="nav-food"><span class="icon">🍽️</span>Food</div>
     <div class="nav-item" onclick="navigate('drinks')" id="nav-drinks"><span class="icon">☕</span>Drinks</div>
     <div class="nav-item" onclick="navigate('snacks')" id="nav-snacks"><span class="icon">🍿</span>Snacks</div>
@@ -86,7 +101,6 @@
     <div class="nav-item" onclick="navigate('feedback')" id="nav-feedback"><span class="icon">⭐</span>Feedback</div>
   </nav>
 
-  <!-- MODAL SUB OPTION -->
   <div class="modal-overlay" id="modal" style="display:none">
     <div class="modal">
       <h3 id="modal-name"></h3>
@@ -99,39 +113,46 @@
   </div>
 
   <script>
+    const SUPABASE_URL = 'https://uscnmensxkqbvfswdloa.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_YeQTKJ39AxMNcUSIzJOsOg_XsBYIn1T';
+    const { createClient } = supabase;
+    const db = createClient(SUPABASE_URL, SUPABASE_KEY);
+
     const tg = window.Telegram.WebApp;
-    tg.expand();
+
+    // PROTEKSI: cek apakah dibuka dari Telegram
+    if (!tg.initData) {
+      document.getElementById('no-tg').style.display = 'flex';
+      document.getElementById('main-header').style.display = 'none';
+      document.getElementById('content').style.display = 'none';
+      document.getElementById('bottom-nav').style.display = 'none';
+    } else {
+      tg.expand();
+    }
 
     const params = new URLSearchParams(window.location.search);
     const tableId = params.get('table') || '?';
     document.getElementById('table-id').textContent = tableId;
 
-    const menus = {
-      food: [
-        { name: 'Nasi Goreng Spesial', price: 35000, stock: true, img: 'https://placehold.co/300x200/c8a165/fff?text=Nasi+Goreng', options: [] },
-        { name: 'Roti Bakar', price: 18000, stock: true, img: 'https://placehold.co/300x200/d4a96a/fff?text=Roti+Bakar', options: ['Original','Cokelat','Keju'] },
-        { name: 'Sandwich', price: 28000, stock: false, img: 'https://placehold.co/300x200/b8956a/fff?text=Sandwich', options: [] },
-        { name: 'Pasta Carbonara', price: 42000, stock: true, img: 'https://placehold.co/300x200/e0c068/2c1a0e?text=Pasta', options: [] },
-      ],
-      drinks: [
-        { name: 'Es Kopi Susu', price: 25000, stock: true, img: 'https://placehold.co/300x200/2c1a0e/fff?text=Es+Kopi+Susu', options: ['Hot','Ice'] },
-        { name: 'Matcha Latte', price: 28000, stock: true, img: 'https://placehold.co/300x200/4a7c59/fff?text=Matcha+Latte', options: ['Hot','Ice'] },
-        { name: 'Americano', price: 20000, stock: false, img: 'https://placehold.co/300x200/555/fff?text=Americano', options: ['Hot','Ice'] },
-        { name: 'Cokelat', price: 22000, stock: true, img: 'https://placehold.co/300x200/5c3317/fff?text=Cokelat', options: ['Hot','Ice'] },
-        { name: 'Lemon Tea', price: 18000, stock: true, img: 'https://placehold.co/300x200/e8d44d/2c1a0e?text=Lemon+Tea', options: ['Hot','Ice'] },
-      ],
-      snacks: [
-        { name: 'Kentang Goreng', price: 15000, stock: true, img: 'https://placehold.co/300x200/e0c068/2c1a0e?text=Kentang', options: [] },
-        { name: 'Onion Ring', price: 18000, stock: false, img: 'https://placehold.co/300x200/c8a165/fff?text=Onion+Ring', options: [] },
-        { name: 'Pisang Goreng', price: 12000, stock: true, img: 'https://placehold.co/300x200/f0c040/2c1a0e?text=Pisang+Goreng', options: [] },
-      ]
-    };
-
+    let menus = { food: [], drinks: [], snacks: [] };
     let cart = [];
     let currentPage = 'food';
     let selectedStar = 0;
     let modalItem = null;
     let modalSelectedOpt = null;
+    let appliedPromo = null;
+
+    async function loadMenus() {
+      document.getElementById('content').innerHTML = '<div class="loading">⏳ Memuat menu...</div>';
+      const { data } = await db.from('menus').select('*').eq('available', true).order('category');
+      if (data) {
+        menus = { food: [], drinks: [], snacks: [] };
+        data.forEach(m => {
+          if (menus[m.category]) menus[m.category].push(m);
+        });
+      }
+      renderPage();
+    }
 
     function navigate(page) {
       currentPage = page;
@@ -142,7 +163,7 @@
 
     function openModal(category, index) {
       modalItem = { ...menus[category][index], category };
-      modalSelectedOpt = modalItem.options.length > 0 ? modalItem.options[0] : null;
+      modalSelectedOpt = modalItem.options && modalItem.options.length > 0 ? modalItem.options[0] : null;
       document.getElementById('modal-name').textContent = modalItem.name;
       document.getElementById('modal-price').textContent = 'Rp ' + modalItem.price.toLocaleString('id-ID');
       const optsEl = document.getElementById('modal-opts');
@@ -169,30 +190,19 @@
       if (!modalItem) return;
       const key = modalItem.name + (modalSelectedOpt ? '_' + modalSelectedOpt : '');
       const existing = cart.find(i => i.key === key);
-      if (existing) {
-        existing.qty += 1;
-      } else {
-        cart.push({ key, name: modalItem.name, option: modalSelectedOpt, price: modalItem.price, qty: 1 });
-      }
+      if (existing) { existing.qty += 1; }
+      else { cart.push({ key, name: modalItem.name, option: modalSelectedOpt, price: modalItem.price, qty: 1 }); }
       updateBadge();
       closeModal();
-      const btn = document.querySelector(`.btn-order[data-key="${modalItem.name}"]`);
-      if (btn) { btn.textContent = '✓ Ditambahkan'; setTimeout(() => btn.textContent = '+ Pesan', 1000); }
     }
 
     function addToCart(category, index) {
       const item = menus[category][index];
-      if (item.options && item.options.length > 0) {
-        openModal(category, index);
-        return;
-      }
+      if (item.options && item.options.length > 0) { openModal(category, index); return; }
       const key = item.name;
       const existing = cart.find(i => i.key === key);
-      if (existing) {
-        existing.qty += 1;
-      } else {
-        cart.push({ key, name: item.name, option: null, price: item.price, qty: 1 });
-      }
+      if (existing) { existing.qty += 1; }
+      else { cart.push({ key, name: item.name, option: null, price: item.price, qty: 1 }); }
       updateBadge();
       const btn = event.target;
       btn.textContent = '✓ Ditambahkan';
@@ -215,34 +225,58 @@
       else badge.style.display = 'none';
     }
 
+    async function applyPromo() {
+      const code = document.getElementById('promo-input').value.trim().toUpperCase();
+      const subtotal = cart.reduce((s, i) => s + i.price * i.qty, 0);
+      const { data: promo } = await db.from('promos').select('*').eq('code', code).eq('active', true).single();
+      const promoMsg = document.getElementById('promo-msg');
+      if (!promo) { promoMsg.className = 'promo-error'; promoMsg.textContent = '❌ Kode promo tidak valid.'; appliedPromo = null; renderPage(); return; }
+      if (promo.expired_at && new Date(promo.expired_at) < new Date()) { promoMsg.className = 'promo-error'; promoMsg.textContent = '❌ Kode promo sudah expired.'; appliedPromo = null; renderPage(); return; }
+      if (promo.used_count >= promo.max_uses) { promoMsg.className = 'promo-error'; promoMsg.textContent = '❌ Kode promo sudah habis.'; appliedPromo = null; renderPage(); return; }
+      if (subtotal < promo.min_order) { promoMsg.className = 'promo-error'; promoMsg.textContent = `❌ Minimum order Rp ${promo.min_order.toLocaleString('id-ID')}.`; appliedPromo = null; renderPage(); return; }
+      appliedPromo = promo;
+      const disc = promo.discount_type === 'percent' ? Math.floor(subtotal * promo.discount_value / 100) : promo.discount_value;
+      promoMsg.className = 'promo-info'; promoMsg.textContent = `✅ Promo ${code} berhasil! Hemat Rp ${disc.toLocaleString('id-ID')}`;
+      renderPage();
+    }
+
+    function calcTotal() {
+      const subtotal = cart.reduce((s, i) => s + i.price * i.qty, 0);
+      if (!appliedPromo) return { subtotal, discount: 0, total: subtotal };
+      const discount = appliedPromo.discount_type === 'percent'
+        ? Math.floor(subtotal * appliedPromo.discount_value / 100)
+        : appliedPromo.discount_value;
+      return { subtotal, discount, total: Math.max(0, subtotal - discount) };
+    }
+
     function renderPage() {
       const content = document.getElementById('content');
       if (['food','drinks','snacks'].includes(currentPage)) {
         const titles = { food: '🍽️ Food', drinks: '☕ Drinks', snacks: '🍿 Snacks' };
         const items = menus[currentPage];
+        if (items.length === 0) { content.innerHTML = `<div class="section-title">${titles[currentPage]}</div><div class="orders-empty"><div class="icon">🍽️</div><p>Menu belum tersedia.</p></div>`; return; }
         content.innerHTML = `
           <div class="section-title">${titles[currentPage]}</div>
           <div class="menu-grid">
             ${items.map((item, i) => `
               <div class="card">
-                <img src="${item.img}" alt="${item.name}" />
+                <img src="${item.image_url || 'https://placehold.co/300x200/e0d6cc/2c1a0e?text=Menu'}" alt="${item.name}"/>
                 <div class="card-body">
                   <h3>${item.name}</h3>
                   <div class="price">Rp ${item.price.toLocaleString('id-ID')}</div>
-                  ${item.options.length > 0 ? `<div class="sub-options">${item.options.map(o => `<span class="sub-opt">${o}</span>`).join('')}</div>` : ''}
-                  ${!item.stock ? '<span class="out-badge">⚠️ Habis</span>' : ''}
-                  <button class="btn-order" data-key="${item.name}" ${!item.stock ? 'disabled' : ''} onclick="addToCart('${currentPage}', ${i})">
-                    ${item.stock ? '+ Pesan' : 'Habis'}
+                  ${item.options && item.options.length > 0 ? `<div class="sub-options">${item.options.map(o => `<span class="sub-opt">${o}</span>`).join('')}</div>` : ''}
+                  ${item.stock <= 0 ? '<span class="out-badge">⚠️ Habis</span>' : ''}
+                  <button class="btn-order" ${item.stock <= 0 ? 'disabled' : ''} onclick="addToCart('${currentPage}', ${i})">
+                    ${item.stock <= 0 ? 'Habis' : '+ Pesan'}
                   </button>
                 </div>
-              </div>
-            `).join('')}
+              </div>`).join('')}
           </div>`;
       } else if (currentPage === 'orders') {
         if (cart.length === 0) {
           content.innerHTML = `<div class="orders-empty"><div class="icon">🛒</div><p>Belum ada pesanan.</p><p style="font-size:12px;margin-top:6px">Pilih menu dulu yuk!</p></div>`;
         } else {
-          const total = cart.reduce((s, i) => s + i.price * i.qty, 0);
+          const { subtotal, discount, total } = calcTotal();
           content.innerHTML = `
             <div class="section-title">🛒 Pesanan Kamu</div>
             ${cart.map(item => `
@@ -262,8 +296,13 @@
                   </div>
                   <div class="item-total">Rp ${(item.price * item.qty).toLocaleString('id-ID')}</div>
                 </div>
-              </div>
-            `).join('')}
+              </div>`).join('')}
+            <div class="promo-wrap">
+              <input id="promo-input" placeholder="Kode Promo" value="${appliedPromo ? appliedPromo.code : ''}"/>
+              <button class="btn-promo" onclick="applyPromo()">Pakai</button>
+            </div>
+            <div id="promo-msg"></div>
+            ${discount > 0 ? `<div class="discount-row"><span>Diskon</span><span>- Rp ${discount.toLocaleString('id-ID')}</span></div>` : ''}
             <div class="order-total"><span>Total</span><span>Rp ${total.toLocaleString('id-ID')}</span></div>
             <button class="btn-checkout" onclick="checkout()">Pesan Sekarang</button>`;
         }
@@ -281,8 +320,14 @@
     }
 
     function checkout() {
-      const total = cart.reduce((s, i) => s + i.price * i.qty, 0);
-      tg.sendData(JSON.stringify({ table: tableId, items: cart, total }));
+      const { total, discount } = calcTotal();
+      tg.sendData(JSON.stringify({
+        table: tableId,
+        items: cart,
+        total,
+        discount,
+        promo_code: appliedPromo ? appliedPromo.code : null
+      }));
     }
 
     function setStar(s) { selectedStar = s; renderPage(); }
@@ -292,7 +337,7 @@
       tg.sendData(JSON.stringify({ type: 'feedback', table: tableId, rating: selectedStar, message: text }));
     }
 
-    renderPage();
+    loadMenus();
   </script>
 </body>
 </html>
