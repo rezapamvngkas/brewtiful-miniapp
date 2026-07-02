@@ -337,7 +337,21 @@
       tg.sendData(JSON.stringify({ type: 'feedback', table: tableId, rating: selectedStar, message: text }));
     }
 
-    loadMenus();
+loadMenus();
+
+db.channel('menu-changes')
+  .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'menus' }, (payload) => {
+    const updated = payload.new;
+    const cat = updated.category;
+    if (menus[cat]) {
+      const idx = menus[cat].findIndex(m => m.id === updated.id);
+      if (idx !== -1) {
+        menus[cat][idx] = updated;
+        if (['food','drinks','snacks'].includes(currentPage) && currentPage === cat) renderPage();
+      }
+    }
+  }).subscribe();
+
   </script>
 </body>
 </html>
