@@ -233,7 +233,7 @@
       if (!promo) { promoMsg.className = 'promo-error'; promoMsg.textContent = '❌ Kode promo tidak valid.'; appliedPromo = null; renderPage(); return; }
       if (promo.expired_at && new Date(promo.expired_at) < new Date()) { promoMsg.className = 'promo-error'; promoMsg.textContent = '❌ Kode promo sudah expired.'; appliedPromo = null; renderPage(); return; }
       if (promo.used_count >= promo.max_uses) { promoMsg.className = 'promo-error'; promoMsg.textContent = '❌ Kode promo sudah habis.'; appliedPromo = null; renderPage(); return; }
-      if (subtotal < promo.min_order) { promoMsg.className = 'promo-error'; promoMsg.textContent = `❌ Minimum order Rp ${promo.min_order.toLocaleString('id-ID')}.`; appliedPromo = null; renderPage(); return; }
+      if (subtotal < parseInt(promo.min_order || 0)) { promoMsg.className = 'promo-error'; promoMsg.textContent = `❌ Minimum order Rp ${promo.min_order.toLocaleString('id-ID')}.`; appliedPromo = null; renderPage(); return; }
       appliedPromo = promo;
       const disc = promo.discount_type === 'percent' ? Math.floor(subtotal * promo.discount_value / 100) : promo.discount_value;
       promoMsg.className = 'promo-info'; promoMsg.textContent = `✅ Promo ${code} berhasil! Hemat Rp ${disc.toLocaleString('id-ID')}`;
