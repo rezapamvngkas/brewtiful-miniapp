@@ -38,13 +38,15 @@
     .qty-btn { width: 28px; height: 28px; border-radius: 50%; border: 1px solid #2c1a0e; background: #fff; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-weight: 700; color: #2c1a0e; }
     .qty-num { font-size: 15px; font-weight: 700; min-width: 20px; text-align: center; }
     .item-total { font-size: 12px; color: #888; }
-    .order-total { background: #2c1a0e; color: #fff; border-radius: 12px; padding: 14px; margin-top: 12px; display: flex; justify-content: space-between; font-weight: 700; }
-    .promo-wrap { background: #fff; border-radius: 12px; padding: 12px; margin-top: 12px; display: flex; gap: 8px; }
-    .promo-wrap input { flex: 1; border: 1px solid #e0d6cc; border-radius: 8px; padding: 8px 10px; font-size: 13px; text-transform: uppercase; }
-    .btn-promo { padding: 8px 14px; background: #2c1a0e; color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
+    .summary-box { background: #fff; border-radius: 12px; padding: 14px; margin-top: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .summary-row { display: flex; justify-content: space-between; font-size: 13px; padding: 4px 0; }
+    .summary-row.total { font-weight: 700; font-size: 15px; color: #b5541c; border-top: 1px solid #e0d6cc; margin-top: 6px; padding-top: 10px; }
+    .summary-row.discount { color: #155724; }
+    .promo-wrap { display: flex; gap: 8px; margin-top: 12px; }
+    .promo-wrap input { flex: 1; border: 1px solid #e0d6cc; border-radius: 8px; padding: 10px; font-size: 13px; text-transform: uppercase; background: #fff; }
+    .btn-promo { padding: 10px 14px; background: #2c1a0e; color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
     .promo-info { font-size: 12px; color: #155724; background: #d4edda; padding: 8px 12px; border-radius: 8px; margin-top: 8px; }
     .promo-error { font-size: 12px; color: #721c24; background: #f8d7da; padding: 8px 12px; border-radius: 8px; margin-top: 8px; }
-    .discount-row { display: flex; justify-content: space-between; padding: 8px 14px; color: #155724; font-weight: 600; font-size: 13px; }
     .btn-checkout { width: 100%; margin-top: 12px; padding: 14px; background: #b5541c; color: #fff; border: none; border-radius: 12px; font-size: 15px; font-weight: 700; cursor: pointer; }
     .feedback-form { background: #fff; border-radius: 14px; padding: 16px; box-shadow: 0 2px 10px rgba(0,0,0,0.07); }
     .feedback-form p { font-size: 13px; margin-bottom: 8px; color: #555; }
@@ -76,7 +78,6 @@
 </head>
 <body>
 
-  <!-- PROTEKSI: tampil kalau bukan dari Telegram -->
   <div class="no-tg" id="no-tg">
     <div style="font-size:48px;margin-bottom:16px">🫘</div>
     <h2>Brewtiful Days</h2>
@@ -117,10 +118,8 @@
     const SUPABASE_KEY = 'sb_publishable_YeQTKJ39AxMNcUSIzJOsOg_XsBYIn1T';
     const { createClient } = supabase;
     const db = createClient(SUPABASE_URL, SUPABASE_KEY);
-
     const tg = window.Telegram.WebApp;
 
-    // PROTEKSI: cek apakah dibuka dari Telegram
     if (false) {
       document.getElementById('no-tg').style.display = 'flex';
       document.getElementById('main-header').style.display = 'none';
@@ -141,17 +140,32 @@
     let modalItem = null;
     let modalSelectedOpt = null;
     let appliedPromo = null;
+    let promoMessage = { type: '', text: '' };
 
     async function loadMenus() {
       document.getElementById('content').innerHTML = '<div class="loading">⏳ Memuat menu...</div>';
-      const { data } = await db.from('menus').select('*').eq('available', true).order('category');
+      const { data } = await db.from('menus').select('*').order('category');
       if (data) {
         menus = { food: [], drinks: [], snacks: [] };
-        data.forEach(m => {
-          if (menus[m.category]) menus[m.category].push(m);
-        });
+        data.forEach(m => { if (menus[m.category]) menus[m.category].push(m); });
       }
       renderPage();
+      subscribeStock();
+    }
+
+    function subscribeStock() {
+      db.channel('menu-stock')
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'menus' }, (payload) => {
+          const updated = payload.new;
+          const cat = updated.category;
+          if (menus[cat]) {
+            const idx = menus[cat].findIndex(m => m.id === updated.id);
+            if (idx !== -1) {
+              menus[cat][idx] = updated;
+              if (currentPage === cat) renderPage();
+            }
+          }
+        }).subscribe();
     }
 
     function navigate(page) {
@@ -166,8 +180,7 @@
       modalSelectedOpt = modalItem.options && modalItem.options.length > 0 ? modalItem.options[0] : null;
       document.getElementById('modal-name').textContent = modalItem.name;
       document.getElementById('modal-price').textContent = 'Rp ' + modalItem.price.toLocaleString('id-ID');
-      const optsEl = document.getElementById('modal-opts');
-      optsEl.innerHTML = modalItem.options.map(o =>
+      document.getElementById('modal-opts').innerHTML = modalItem.options.map(o =>
         `<div class="modal-opt ${o === modalSelectedOpt ? 'selected' : ''}" onclick="selectModalOpt('${o}')">${o}</div>`
       ).join('');
       document.getElementById('modal').style.display = 'flex';
@@ -175,15 +188,12 @@
 
     function selectModalOpt(opt) {
       modalSelectedOpt = opt;
-      document.querySelectorAll('.modal-opt').forEach(el => {
-        el.classList.toggle('selected', el.textContent === opt);
-      });
+      document.querySelectorAll('.modal-opt').forEach(el => el.classList.toggle('selected', el.textContent === opt));
     }
 
     function closeModal() {
       document.getElementById('modal').style.display = 'none';
-      modalItem = null;
-      modalSelectedOpt = null;
+      modalItem = null; modalSelectedOpt = null;
     }
 
     function confirmAddToCart() {
@@ -198,6 +208,7 @@
 
     function addToCart(category, index) {
       const item = menus[category][index];
+      if (item.stock <= 0) return;
       if (item.options && item.options.length > 0) { openModal(category, index); return; }
       const key = item.name;
       const existing = cart.find(i => i.key === key);
@@ -214,6 +225,8 @@
       if (idx === -1) return;
       cart[idx].qty += delta;
       if (cart[idx].qty <= 0) cart.splice(idx, 1);
+      appliedPromo = null;
+      promoMessage = { type: '', text: '' };
       updateBadge();
       renderPage();
     }
@@ -227,17 +240,36 @@
 
     async function applyPromo() {
       const code = document.getElementById('promo-input').value.trim().toUpperCase();
+      if (!code) return;
       const subtotal = cart.reduce((s, i) => s + i.price * i.qty, 0);
-      const { data: promo } = await db.from('promos').select('*').eq('code', code).eq('active', true).single();
-      const promoMsg = document.getElementById('promo-msg');
-      if (!promo) { promoMsg.className = 'promo-error'; promoMsg.textContent = '❌ Kode promo tidak valid.'; appliedPromo = null; renderPage(); return; }
-      if (promo.expired_at && new Date(promo.expired_at) < new Date()) { promoMsg.className = 'promo-error'; promoMsg.textContent = '❌ Kode promo sudah expired.'; appliedPromo = null; renderPage(); return; }
-      if (promo.used_count >= promo.max_uses) { promoMsg.className = 'promo-error'; promoMsg.textContent = '❌ Kode promo sudah habis.'; appliedPromo = null; renderPage(); return; }
-      if (subtotal < parseInt(promo.min_order || 0)) { promoMsg.className = 'promo-error'; promoMsg.textContent = `❌ Minimum order Rp ${promo.min_order.toLocaleString('id-ID')}.`; appliedPromo = null; renderPage(); return; }
-      appliedPromo = promo;
-      const disc = promo.discount_type === 'percent' ? Math.floor(subtotal * promo.discount_value / 100) : promo.discount_value;
-      promoMsg.className = 'promo-info'; promoMsg.textContent = `✅ Promo ${code} berhasil! Hemat Rp ${disc.toLocaleString('id-ID')}`;
+      const { data: promo, error } = await db.from('promos').select('*').eq('code', code).eq('active', true).single();
+      if (error || !promo) {
+        promoMessage = { type: 'error', text: '❌ Kode promo tidak valid.' };
+        appliedPromo = null;
+      } else if (promo.expired_at && new Date(promo.expired_at) < new Date()) {
+        promoMessage = { type: 'error', text: '❌ Kode promo sudah expired.' };
+        appliedPromo = null;
+      } else if (promo.used_count >= promo.max_uses) {
+        promoMessage = { type: 'error', text: '❌ Kode promo sudah habis.' };
+        appliedPromo = null;
+      } else if (subtotal < parseInt(promo.min_order || 0)) {
+        promoMessage = { type: 'error', text: `❌ Minimum pembelian ${formatRp(promo.min_order)} untuk pakai promo ini. Subtotal kamu ${formatRp(subtotal)}.` };
+        appliedPromo = null;
+      } else {
+        const disc = promo.discount_type === 'percent'
+          ? Math.floor(subtotal * promo.discount_value / 100)
+          : promo.discount_value;
+        appliedPromo = promo;
+        promoMessage = { type: 'info', text: `✅ Promo ${code} berhasil! Hemat ${formatRp(disc)}` };
+      }
       renderPage();
+      if (document.getElementById('promo-input')) {
+        document.getElementById('promo-input').value = code;
+        if (promoMessage.text) {
+          const msgEl = document.getElementById('promo-msg');
+          if (msgEl) { msgEl.className = promoMessage.type === 'error' ? 'promo-error' : 'promo-info'; msgEl.textContent = promoMessage.text; }
+        }
+      }
     }
 
     function calcTotal() {
@@ -249,6 +281,8 @@
       return { subtotal, discount, total: Math.max(0, subtotal - discount) };
     }
 
+    function formatRp(num) { return 'Rp ' + Number(num).toLocaleString('id-ID'); }
+
     function renderPage() {
       const content = document.getElementById('content');
       if (['food','drinks','snacks'].includes(currentPage)) {
@@ -258,19 +292,21 @@
         content.innerHTML = `
           <div class="section-title">${titles[currentPage]}</div>
           <div class="menu-grid">
-            ${items.map((item, i) => `
-              <div class="card">
+            ${items.map((item, i) => {
+              const habis = item.stock <= 0;
+              return `<div class="card">
                 <img src="${item.image_url || 'https://placehold.co/300x200/e0d6cc/2c1a0e?text=Menu'}" alt="${item.name}"/>
                 <div class="card-body">
                   <h3>${item.name}</h3>
-                  <div class="price">Rp ${item.price.toLocaleString('id-ID')}</div>
+                  <div class="price">${formatRp(item.price)}</div>
                   ${item.options && item.options.length > 0 ? `<div class="sub-options">${item.options.map(o => `<span class="sub-opt">${o}</span>`).join('')}</div>` : ''}
-                  ${item.stock <= 0 ? '<span class="out-badge">⚠️ Habis</span>' : ''}
-                  <button class="btn-order" ${item.stock <= 0 ? 'disabled' : ''} onclick="addToCart('${currentPage}', ${i})">
-                    ${item.stock <= 0 ? 'Habis' : '+ Pesan'}
+                  ${habis ? '<span class="out-badge">⚠️ Habis</span>' : ''}
+                  <button class="btn-order" ${habis ? 'disabled' : ''} onclick="addToCart('${currentPage}', ${i})">
+                    ${habis ? 'Habis' : '+ Pesan'}
                   </button>
                 </div>
-              </div>`).join('')}
+              </div>`;
+            }).join('')}
           </div>`;
       } else if (currentPage === 'orders') {
         if (cart.length === 0) {
@@ -286,7 +322,7 @@
                     <div class="order-item-name">${item.name}</div>
                     ${item.option ? `<div class="order-item-sub">${item.option}</div>` : ''}
                   </div>
-                  <div class="order-item-price">Rp ${item.price.toLocaleString('id-ID')}</div>
+                  <div class="order-item-price">${formatRp(item.price)}</div>
                 </div>
                 <div class="order-item-bottom">
                   <div class="qty-control">
@@ -294,16 +330,21 @@
                     <span class="qty-num">${item.qty}</span>
                     <button class="qty-btn" onclick="changeQty('${item.key}', 1)">+</button>
                   </div>
-                  <div class="item-total">Rp ${(item.price * item.qty).toLocaleString('id-ID')}</div>
+                  <div class="item-total">${formatRp(item.price * item.qty)}</div>
                 </div>
               </div>`).join('')}
+
             <div class="promo-wrap">
               <input id="promo-input" placeholder="Kode Promo" value="${appliedPromo ? appliedPromo.code : ''}"/>
               <button class="btn-promo" onclick="applyPromo()">Pakai</button>
             </div>
-            <div id="promo-msg"></div>
-            ${discount > 0 ? `<div class="discount-row"><span>Diskon</span><span>- Rp ${discount.toLocaleString('id-ID')}</span></div>` : ''}
-            <div class="order-total"><span>Total</span><span>Rp ${total.toLocaleString('id-ID')}</span></div>
+            <div id="promo-msg" class="${promoMessage.type === 'error' ? 'promo-error' : promoMessage.text ? 'promo-info' : ''}">${promoMessage.text}</div>
+
+            <div class="summary-box">
+              <div class="summary-row"><span>Subtotal</span><span>${formatRp(subtotal)}</span></div>
+              ${discount > 0 ? `<div class="summary-row discount"><span>🎁 Diskon (${appliedPromo.code})</span><span>-${formatRp(discount)}</span></div>` : ''}
+              <div class="summary-row total"><span>Total Pembayaran</span><span>${formatRp(total)}</span></div>
+            </div>
             <button class="btn-checkout" onclick="checkout()">Pesan Sekarang</button>`;
         }
       } else if (currentPage === 'feedback') {
@@ -320,12 +361,9 @@
     }
 
     function checkout() {
-      const { total, discount } = calcTotal();
+      const { subtotal, discount, total } = calcTotal();
       tg.sendData(JSON.stringify({
-        table: tableId,
-        items: cart,
-        total,
-        discount,
+        table: tableId, items: cart, total, discount,
         promo_code: appliedPromo ? appliedPromo.code : null
       }));
     }
@@ -337,21 +375,7 @@
       tg.sendData(JSON.stringify({ type: 'feedback', table: tableId, rating: selectedStar, message: text }));
     }
 
-loadMenus();
-
-db.channel('menu-changes')
-  .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'menus' }, (payload) => {
-    const updated = payload.new;
-    const cat = updated.category;
-    if (menus[cat]) {
-      const idx = menus[cat].findIndex(m => m.id === updated.id);
-      if (idx !== -1) {
-        menus[cat][idx] = updated;
-        if (['food','drinks','snacks'].includes(currentPage) && currentPage === cat) renderPage();
-      }
-    }
-  }).subscribe();
-
+    loadMenus();
   </script>
 </body>
 </html>
