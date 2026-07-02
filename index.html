@@ -29,6 +29,7 @@
     .orders-empty { text-align: center; padding: 60px 20px; color: #aaa; }
     .orders-empty .icon { font-size: 48px; margin-bottom: 12px; }
     .order-item { background: #fff; border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .order-item.out-of-stock { border: 1px solid #f8d7da; }
     .order-item-top { display: flex; justify-content: space-between; align-items: flex-start; }
     .order-item-name { font-size: 13px; font-weight: 600; }
     .order-item-sub { font-size: 11px; color: #888; margin-top: 2px; }
@@ -38,6 +39,9 @@
     .qty-btn { width: 28px; height: 28px; border-radius: 50%; border: 1px solid #2c1a0e; background: #fff; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-weight: 700; color: #2c1a0e; }
     .qty-num { font-size: 15px; font-weight: 700; min-width: 20px; text-align: center; }
     .item-total { font-size: 12px; color: #888; }
+    .stock-warn { font-size: 11px; padding: 4px 8px; border-radius: 6px; margin-bottom: 8px; }
+    .stock-warn.habis { background: #f8d7da; color: #721c24; }
+    .stock-warn.sedikit { background: #fff3cd; color: #856404; }
     .summary-box { background: #fff; border-radius: 12px; padding: 14px; margin-top: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
     .summary-row { display: flex; justify-content: space-between; font-size: 13px; padding: 4px 0; }
     .summary-row.total { font-weight: 700; font-size: 15px; color: #b5541c; border-top: 1px solid #e0d6cc; margin-top: 6px; padding-top: 10px; }
@@ -48,6 +52,7 @@
     .promo-info { font-size: 12px; color: #155724; background: #d4edda; padding: 8px 12px; border-radius: 8px; margin-top: 8px; }
     .promo-error { font-size: 12px; color: #721c24; background: #f8d7da; padding: 8px 12px; border-radius: 8px; margin-top: 8px; }
     .btn-checkout { width: 100%; margin-top: 12px; padding: 14px; background: #b5541c; color: #fff; border: none; border-radius: 12px; font-size: 15px; font-weight: 700; cursor: pointer; }
+    .btn-checkout:disabled { background: #ddd; color: #aaa; cursor: not-allowed; }
     .feedback-form { background: #fff; border-radius: 14px; padding: 16px; box-shadow: 0 2px 10px rgba(0,0,0,0.07); }
     .feedback-form p { font-size: 13px; margin-bottom: 8px; color: #555; }
     .stars { display: flex; gap: 8px; margin-bottom: 16px; }
@@ -142,6 +147,19 @@
     let appliedPromo = null;
     let promoMessage = { type: '', text: '' };
 
+    function formatRp(num) { return 'Rp ' + Number(num).toLocaleString('id-ID'); }
+
+    function getAllMenus() { return [...menus.food, ...menus.drinks, ...menus.snacks]; }
+
+    function getMenuByName(name) { return getAllMenus().find(m => m.name === name); }
+
+    function hasOutOfStockInCart() {
+      return cart.some(item => {
+        const m = getMenuByName(item.name);
+        return m && m.stock <= 0;
+      });
+    }
+
     async function loadMenus() {
       document.getElementById('content').innerHTML = '<div class="loading">⏳ Memuat menu...</div>';
       const { data } = await db.from('menus').select('*').order('category');
@@ -162,7 +180,7 @@
             const idx = menus[cat].findIndex(m => m.id === updated.id);
             if (idx !== -1) {
               menus[cat][idx] = updated;
-              if (currentPage === cat) renderPage();
+              if (currentPage === cat || currentPage === 'orders') renderPage();
             }
           }
         }).subscribe();
@@ -179,7 +197,7 @@
       modalItem = { ...menus[category][index], category };
       modalSelectedOpt = modalItem.options && modalItem.options.length > 0 ? modalItem.options[0] : null;
       document.getElementById('modal-name').textContent = modalItem.name;
-      document.getElementById('modal-price').textContent = 'Rp ' + modalItem.price.toLocaleString('id-ID');
+      document.getElementById('modal-price').textContent = formatRp(modalItem.price);
       document.getElementById('modal-opts').innerHTML = modalItem.options.map(o =>
         `<div class="modal-opt ${o === modalSelectedOpt ? 'selected' : ''}" onclick="selectModalOpt('${o}')">${o}</div>`
       ).join('');
@@ -253,7 +271,7 @@
         promoMessage = { type: 'error', text: '❌ Kode promo sudah habis.' };
         appliedPromo = null;
       } else if (subtotal < parseInt(promo.min_order || 0)) {
-        promoMessage = { type: 'error', text: `❌ Minimum pembelian ${formatRp(promo.min_order)} untuk pakai promo ini. Subtotal kamu ${formatRp(subtotal)}.` };
+        promoMessage = { type: 'error', text: `❌ Minimum pembelian ${formatRp(promo.min_order)}. Subtotal kamu ${formatRp(subtotal)}.` };
         appliedPromo = null;
       } else {
         const disc = promo.discount_type === 'percent'
@@ -263,13 +281,12 @@
         promoMessage = { type: 'info', text: `✅ Promo ${code} berhasil! Hemat ${formatRp(disc)}` };
       }
       renderPage();
-      if (document.getElementById('promo-input')) {
-        document.getElementById('promo-input').value = code;
-        if (promoMessage.text) {
-          const msgEl = document.getElementById('promo-msg');
-          if (msgEl) { msgEl.className = promoMessage.type === 'error' ? 'promo-error' : 'promo-info'; msgEl.textContent = promoMessage.text; }
-        }
-      }
+      setTimeout(() => {
+        const inp = document.getElementById('promo-input');
+        const msg = document.getElementById('promo-msg');
+        if (inp) inp.value = code;
+        if (msg) { msg.className = promoMessage.type === 'error' ? 'promo-error' : 'promo-info'; msg.textContent = promoMessage.text; }
+      }, 50);
     }
 
     function calcTotal() {
@@ -281,14 +298,16 @@
       return { subtotal, discount, total: Math.max(0, subtotal - discount) };
     }
 
-    function formatRp(num) { return 'Rp ' + Number(num).toLocaleString('id-ID'); }
-
     function renderPage() {
       const content = document.getElementById('content');
+
       if (['food','drinks','snacks'].includes(currentPage)) {
         const titles = { food: '🍽️ Food', drinks: '☕ Drinks', snacks: '🍿 Snacks' };
         const items = menus[currentPage];
-        if (items.length === 0) { content.innerHTML = `<div class="section-title">${titles[currentPage]}</div><div class="orders-empty"><div class="icon">🍽️</div><p>Menu belum tersedia.</p></div>`; return; }
+        if (items.length === 0) {
+          content.innerHTML = `<div class="section-title">${titles[currentPage]}</div><div class="orders-empty"><div class="icon">🍽️</div><p>Menu belum tersedia.</p></div>`;
+          return;
+        }
         content.innerHTML = `
           <div class="section-title">${titles[currentPage]}</div>
           <div class="menu-grid">
@@ -300,7 +319,7 @@
                   <h3>${item.name}</h3>
                   <div class="price">${formatRp(item.price)}</div>
                   ${item.options && item.options.length > 0 ? `<div class="sub-options">${item.options.map(o => `<span class="sub-opt">${o}</span>`).join('')}</div>` : ''}
-                  ${habis ? '<span class="out-badge">⚠️ Habis</span>' : ''}
+                  ${habis ? '<span class="out-badge">⚠️ Habis</span>' : item.stock <= 3 ? `<span class="out-badge" style="background:#fff3cd;color:#856404">Sisa ${item.stock}</span>` : ''}
                   <button class="btn-order" ${habis ? 'disabled' : ''} onclick="addToCart('${currentPage}', ${i})">
                     ${habis ? 'Habis' : '+ Pesan'}
                   </button>
@@ -308,45 +327,58 @@
               </div>`;
             }).join('')}
           </div>`;
+
       } else if (currentPage === 'orders') {
         if (cart.length === 0) {
           content.innerHTML = `<div class="orders-empty"><div class="icon">🛒</div><p>Belum ada pesanan.</p><p style="font-size:12px;margin-top:6px">Pilih menu dulu yuk!</p></div>`;
-        } else {
-          const { subtotal, discount, total } = calcTotal();
-          content.innerHTML = `
-            <div class="section-title">🛒 Pesanan Kamu</div>
-            ${cart.map(item => `
-              <div class="order-item">
-                <div class="order-item-top">
-                  <div>
-                    <div class="order-item-name">${item.name}</div>
-                    ${item.option ? `<div class="order-item-sub">${item.option}</div>` : ''}
-                  </div>
-                  <div class="order-item-price">${formatRp(item.price)}</div>
-                </div>
-                <div class="order-item-bottom">
-                  <div class="qty-control">
-                    <button class="qty-btn" onclick="changeQty('${item.key}', -1)">−</button>
-                    <span class="qty-num">${item.qty}</span>
-                    <button class="qty-btn" onclick="changeQty('${item.key}', 1)">+</button>
-                  </div>
-                  <div class="item-total">${formatRp(item.price * item.qty)}</div>
-                </div>
-              </div>`).join('')}
-
-            <div class="promo-wrap">
-              <input id="promo-input" placeholder="Kode Promo" value="${appliedPromo ? appliedPromo.code : ''}"/>
-              <button class="btn-promo" onclick="applyPromo()">Pakai</button>
-            </div>
-            <div id="promo-msg" class="${promoMessage.type === 'error' ? 'promo-error' : promoMessage.text ? 'promo-info' : ''}">${promoMessage.text}</div>
-
-            <div class="summary-box">
-              <div class="summary-row"><span>Subtotal</span><span>${formatRp(subtotal)}</span></div>
-              ${discount > 0 ? `<div class="summary-row discount"><span>🎁 Diskon (${appliedPromo.code})</span><span>-${formatRp(discount)}</span></div>` : ''}
-              <div class="summary-row total"><span>Total Pembayaran</span><span>${formatRp(total)}</span></div>
-            </div>
-            <button class="btn-checkout" onclick="checkout()">Pesan Sekarang</button>`;
+          return;
         }
+
+        const { subtotal, discount, total } = calcTotal();
+        const cartHasOutOfStock = hasOutOfStockInCart();
+
+        content.innerHTML = `
+          <div class="section-title">🛒 Pesanan Kamu</div>
+          ${cart.map(item => {
+            const menuData = getMenuByName(item.name);
+            const stokHabis = menuData && menuData.stock <= 0;
+            const stokSedikit = menuData && menuData.stock > 0 && menuData.stock <= 2;
+            return `<div class="order-item ${stokHabis ? 'out-of-stock' : ''}">
+              ${stokHabis ? '<div class="stock-warn habis">❌ Stok habis — hapus dari pesanan</div>' : ''}
+              ${stokSedikit ? `<div class="stock-warn sedikit">⚠️ Stok tersisa ${menuData.stock}</div>` : ''}
+              <div class="order-item-top">
+                <div>
+                  <div class="order-item-name">${item.name}</div>
+                  ${item.option ? `<div class="order-item-sub">${item.option}</div>` : ''}
+                </div>
+                <div class="order-item-price">${formatRp(item.price)}</div>
+              </div>
+              <div class="order-item-bottom">
+                <div class="qty-control">
+                  <button class="qty-btn" onclick="changeQty('${item.key}', -1)">−</button>
+                  <span class="qty-num">${item.qty}</span>
+                  <button class="qty-btn" onclick="changeQty('${item.key}', 1)">+</button>
+                </div>
+                <div class="item-total">${formatRp(item.price * item.qty)}</div>
+              </div>
+            </div>`;
+          }).join('')}
+
+          <div class="promo-wrap">
+            <input id="promo-input" placeholder="Kode Promo" value="${appliedPromo ? appliedPromo.code : ''}"/>
+            <button class="btn-promo" onclick="applyPromo()">Pakai</button>
+          </div>
+          <div id="promo-msg" class="${promoMessage.type === 'error' ? 'promo-error' : promoMessage.text ? 'promo-info' : ''}">${promoMessage.text}</div>
+
+          <div class="summary-box">
+            <div class="summary-row"><span>Subtotal</span><span>${formatRp(subtotal)}</span></div>
+            ${discount > 0 ? `<div class="summary-row discount"><span>🎁 Diskon (${appliedPromo.code})</span><span>-${formatRp(discount)}</span></div>` : ''}
+            <div class="summary-row total"><span>Total Pembayaran</span><span>${formatRp(total)}</span></div>
+          </div>
+
+          ${cartHasOutOfStock ? '<div style="background:#f8d7da;color:#721c24;padding:10px 14px;border-radius:10px;font-size:13px;margin-top:10px">❌ Hapus item yang habis sebelum memesan.</div>' : ''}
+          <button class="btn-checkout" ${cartHasOutOfStock ? 'disabled' : ''} onclick="checkout()">Pesan Sekarang</button>`;
+
       } else if (currentPage === 'feedback') {
         content.innerHTML = `
           <div class="section-title">⭐ Feedback</div>
@@ -361,6 +393,7 @@
     }
 
     function checkout() {
+      if (hasOutOfStockInCart()) return;
       const { subtotal, discount, total } = calcTotal();
       tg.sendData(JSON.stringify({
         table: tableId, items: cart, total, discount,
